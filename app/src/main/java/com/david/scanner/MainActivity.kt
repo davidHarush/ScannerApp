@@ -299,21 +299,6 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
-//    @Composable
-//    fun AppBtn(enabled: Boolean, icon: Int, text: String, onClick: () -> Unit) {
-//
-//        Button(
-//            enabled = enabled,
-//            modifier = Modifier.padding(horizontal = 6.dp),
-//            onClick = onClick
-//        )
-//        {
-//            Icon(painterResource(id = icon), contentDescription = "Scan Document Icon")
-//            Spacer(modifier = Modifier.padding(4.dp))
-//            Text(text)
-//        }
-//    }
-
     private fun saveAsPdfToDownloads(
         pdf: GmsDocumentScanningResult.Pdf,
     ) {
