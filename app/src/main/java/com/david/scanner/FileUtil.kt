@@ -17,6 +17,7 @@ import java.io.File
 object FileUtil {
 
     enum class FileType { PDF, IMAGE }
+
     suspend fun saveFileToDownloads(
         context: Context,
         sourceUri: Uri,
@@ -33,6 +34,7 @@ object FileUtil {
                         put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
                         put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
                     }
+
                     FileType.IMAGE -> {
                         put(MediaStore.MediaColumns.DISPLAY_NAME, "$baseFileName.jpg")
                         put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
@@ -76,7 +78,9 @@ object FileUtil {
             imageUriList.forEachIndexed { index, uri ->
                 resolver.openInputStream(uri)?.use { input ->
                     val bitmap = BitmapFactory.decodeStream(input)
-                    val pageInfo = PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, index + 1).create()
+                    val pageInfo =
+                        PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, index + 1)
+                            .create()
                     val page = pdfDocument.startPage(pageInfo)
                     page.canvas.drawBitmap(bitmap, 0f, 0f, null)
                     pdfDocument.finishPage(page)

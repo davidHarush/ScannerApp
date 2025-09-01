@@ -11,9 +11,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.ColorInt
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -30,7 +31,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
-import java.util.Calendar
 
 class MainActivity : ComponentActivity() {
 
@@ -74,18 +74,21 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.light(transparent, transparent),
-            navigationBarStyle = SystemBarStyle.light(transparent, transparent)
-        )
-
         setContent {
             viewModel = viewModel<ScannerViewModel>()
 
             ScannerAppTheme {
+                val backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f).toArgb()
+                LaunchedEffect(Unit) {
+                    enableEdgeToEdge(
+                        statusBarStyle = SystemBarStyle.light(backgroundColor, backgroundColor),
+                        navigationBarStyle = SystemBarStyle.light(backgroundColor, backgroundColor)
+                    )
+                }
+
                 Surface(
-                    modifier = Modifier.fillMaxSize().navigationBarsPadding().statusBarsPadding(),
-                    color = Color.White
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
                 ) {
                     ScannerScreen(
                         onScanClick = { startScanning() },
@@ -106,7 +109,10 @@ class MainActivity : ComponentActivity() {
             }
             .addOnFailureListener { exception ->
                 viewModel.updateLoadingState(false)
-                showEnhancedToast("❌ Error starting scanner: ${exception.message}", isSuccess = false)
+                showEnhancedToast(
+                    "❌ Error starting scanner: ${exception.message}",
+                    isSuccess = false
+                )
             }
     }
 
@@ -124,6 +130,7 @@ class MainActivity : ComponentActivity() {
                                 fileType = FileUtil.FileType.PDF
                             )
                         }
+
                         viewModel.scannedPages.isNotEmpty() -> {
                             val pdfFile = FileUtil.createMultiPagePdf(
                                 context = applicationContext,
@@ -132,6 +139,7 @@ class MainActivity : ComponentActivity() {
                             )
                             pdfFile != null
                         }
+
                         else -> false
                     }
                 }
@@ -156,8 +164,12 @@ class MainActivity : ComponentActivity() {
                 val fileToShare: File? = withContext(Dispatchers.IO) {
                     when {
                         viewModel.scannedPdf != null -> {
-                            copyUriToAppFiles(viewModel.scannedPdf!!.uri, "${viewModel.fileNameInput}.pdf")
+                            copyUriToAppFiles(
+                                viewModel.scannedPdf!!.uri,
+                                "${viewModel.fileNameInput}.pdf"
+                            )
                         }
+
                         viewModel.scannedPages.isNotEmpty() -> {
                             FileUtil.createMultiPagePdf(
                                 applicationContext,
@@ -165,12 +177,14 @@ class MainActivity : ComponentActivity() {
                                 viewModel.fileNameInput
                             )
                         }
+
                         else -> null
                     }
                 }
 
                 if (fileToShare != null) {
-                    val shareIntent = FileUtil.shareFile(this@MainActivity, fileToShare, "application/pdf")
+                    val shareIntent =
+                        FileUtil.shareFile(this@MainActivity, fileToShare, "application/pdf")
                     startActivity(Intent.createChooser(shareIntent, "Share Scanned Document"))
                     showEnhancedToast("📤 Opening share options...", isSuccess = true)
                 } else {
@@ -207,30 +221,3 @@ class MainActivity : ComponentActivity() {
         ).show()
     }
 }
-
-
-fun ComponentActivity.setEdgeToEdge() {
-    return when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
-        in 6..20 -> setEdgeToEdgeWithDarkIcons()
-        else -> setEdgeToEdgeWithLightIcons()
-    }
-}
-
-@ColorInt
-private val transparent: Int = Color.Transparent.toArgb()
-
-fun ComponentActivity.setEdgeToEdgeWithDarkIcons() {
-    enableEdgeToEdge(
-        statusBarStyle = SystemBarStyle.dark(transparent),
-        navigationBarStyle = SystemBarStyle.dark(transparent)
-    )
-}
-
-
-fun ComponentActivity.setEdgeToEdgeWithLightIcons() {
-    enableEdgeToEdge(
-        statusBarStyle = SystemBarStyle.light(transparent, transparent),
-        navigationBarStyle = SystemBarStyle.light(transparent, transparent)
-    )
-}
-
