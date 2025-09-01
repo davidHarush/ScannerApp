@@ -1,326 +1,236 @@
 package com.david.scanner
 
-import android.app.AlertDialog
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
-import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Divider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
+import androidx.annotation.ColorInt
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
-import coil.compose.AsyncImage
+import androidx.compose.ui.graphics.toArgb
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.david.scanner.presentation.ScannerViewModel
+import com.david.scanner.ui.screens.ScannerScreen
 import com.david.scanner.ui.theme.ScannerAppTheme
-import com.google.mlkit.vision.documentscanner.GmsDocumentScanner
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
-
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.IOException
+import java.util.Calendar
 
 class MainActivity : ComponentActivity() {
 
-    private var pdfFile: GmsDocumentScanningResult.Pdf? = null
-    private var pageUriList = mutableListOf<Uri>()
-
-    private var imagePreViewUri: Uri? = null
-    private lateinit var requestPermissionLauncher: ActivityResultLauncher<String>
-
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
+    private val scanner by lazy {
         val options = GmsDocumentScannerOptions.Builder()
             .setGalleryImportAllowed(true)
-            .setPageLimit(5)
+            .setPageLimit(15)
             .setResultFormats(
                 GmsDocumentScannerOptions.RESULT_FORMAT_JPEG,
                 GmsDocumentScannerOptions.RESULT_FORMAT_PDF
             )
             .build()
-        val scanner = GmsDocumentScanning.getClient(options)
+        GmsDocumentScanning.getClient(options)
+    }
 
+    private lateinit var viewModel: ScannerViewModel
 
-        requestPermissionLauncher = registerForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { isGranted: Boolean ->
-            if (isGranted) {
+    private val scanLauncher =
+        registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+            viewModel.updateLoadingState(false)
+            if (result.resultCode == RESULT_OK) {
+                val scanResult = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
+                viewModel.updateScanResult(
+                    pdf = scanResult?.pdf,
+                    pages = scanResult?.pages?.map { it.imageUri } ?: emptyList()
+                )
 
-                pdfFile?.let {
-                    saveAsImage()
+                val pages = scanResult?.pages
+                val message = when {
+                    scanResult?.pdf != null -> "PDF document scanned successfully! ✓"
+                    pages != null && pages.isNotEmpty() -> "${pages.size} page${if (pages.size > 1) "s" else ""} scanned successfully! ✓"
+                    else -> "Scan cancelled"
                 }
+
+                showEnhancedToast(message, isSuccess = scanResult != null)
             } else {
-                Toast.makeText(this, "Permission required to save the file", Toast.LENGTH_SHORT)
-                    .show()
+                showEnhancedToast("Scan cancelled", isSuccess = false)
             }
         }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(transparent, transparent),
+            navigationBarStyle = SystemBarStyle.light(transparent, transparent)
+        )
 
         setContent {
+            viewModel = viewModel<ScannerViewModel>()
+
             ScannerAppTheme {
                 Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    modifier = Modifier.fillMaxSize().navigationBarsPadding().statusBarsPadding(),
+                    color = Color.White
                 ) {
-
-                    val imageUris = remember { mutableStateOf(emptyList<Uri>()) }
-
-                    val scannerLauncher = rememberLauncherForActivityResult(
-                        contract = ActivityResultContracts.StartIntentSenderForResult(),
-                        onResult = { activityResult ->
-                            if (activityResult.resultCode != RESULT_OK) return@rememberLauncherForActivityResult
-                            val result =
-                                GmsDocumentScanningResult.fromActivityResultIntent(activityResult.data)
-
-
-                            imageUris.value = emptyList()
-                            imageUris.value = result?.pages?.map { it.imageUri } ?: emptyList()
-                            pageUriList.addAll(imageUris.value)
-
-                            result?.pdf?.let { gmsPdf ->
-                                pdfFile = gmsPdf
-                            }
-
-                            result?.pages?.let { pages ->
-                                imagePreViewUri = pages.first().imageUri
-                            }
-                        }
+                    ScannerScreen(
+                        onScanClick = { startScanning() },
+                        onSaveClick = { saveScannedDocument() },
+                        onShareClick = { shareScannedDocument() },
+                        viewModel = viewModel
                     )
+                }
+            }
+        }
+    }
 
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        Column {
-                            ScanDocumentButton(scanner, scannerLauncher)
-                            Divider(thickness = 3.dp)
-                            SaveOpenShareButtons(pdfFile)
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.Top,
-                                horizontalAlignment = Alignment.CenterHorizontally
+    private fun startScanning() {
+        viewModel.updateLoadingState(true)
+        scanner.getStartScanIntent(this)
+            .addOnSuccessListener { intentSender ->
+                scanLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
+            }
+            .addOnFailureListener { exception ->
+                viewModel.updateLoadingState(false)
+                showEnhancedToast("❌ Error starting scanner: ${exception.message}", isSuccess = false)
+            }
+    }
+
+    private fun saveScannedDocument() {
+        lifecycleScope.launch {
+            viewModel.updateLoadingState(true)
+            try {
+                val success = withContext(Dispatchers.IO) {
+                    when {
+                        viewModel.scannedPdf != null -> {
+                            FileUtil.saveFileToDownloads(
+                                context = applicationContext,
+                                sourceUri = viewModel.scannedPdf!!.uri,
+                                baseFileName = viewModel.fileNameInput,
+                                fileType = FileUtil.FileType.PDF
                             )
-                            {
-                                imageUris.value.forEach { uri ->
-                                    Box(modifier = Modifier.padding(8.dp)) {
-                                        AsyncImage(
-                                            model = uri,
-                                            contentDescription = null,
-                                            contentScale = ContentScale.FillWidth,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-                                }
-
-                            }
                         }
+                        viewModel.scannedPages.isNotEmpty() -> {
+                            val pdfFile = FileUtil.createMultiPagePdf(
+                                context = applicationContext,
+                                imageUriList = viewModel.scannedPages,
+                                baseFileName = viewModel.fileNameInput
+                            )
+                            pdfFile != null
+                        }
+                        else -> false
                     }
-
-
                 }
+
+                showEnhancedToast(
+                    if (success) "📄 Document '${viewModel.fileNameInput}' saved successfully to Downloads!"
+                    else "❌ Failed to save document",
+                    isSuccess = success
+                )
+            } catch (e: Exception) {
+                showEnhancedToast("❌ Error saving document: ${e.message}", isSuccess = false)
+            } finally {
+                viewModel.updateLoadingState(false)
             }
         }
     }
 
-    @Composable
-    fun ScanDocumentButton(
-        scanner: GmsDocumentScanner,
-        scannerLauncher: ActivityResultLauncher<IntentSenderRequest>
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .zIndex(1f)
-                .background(
-                    MaterialTheme.colorScheme.primaryContainer.copy(
-                        alpha = 0.8f
-                    )
-                )
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Button(
-                modifier = Modifier.padding(6.dp),
-                onClick = {
-                    scanner.getStartScanIntent(this@MainActivity)
-                        .addOnSuccessListener { intent ->
-                            scannerLauncher.launch(
-                                IntentSenderRequest.Builder(intent).build()
+    private fun shareScannedDocument() {
+        lifecycleScope.launch {
+            viewModel.updateLoadingState(true)
+            try {
+                val fileToShare: File? = withContext(Dispatchers.IO) {
+                    when {
+                        viewModel.scannedPdf != null -> {
+                            copyUriToAppFiles(viewModel.scannedPdf!!.uri, "${viewModel.fileNameInput}.pdf")
+                        }
+                        viewModel.scannedPages.isNotEmpty() -> {
+                            FileUtil.createMultiPagePdf(
+                                applicationContext,
+                                viewModel.scannedPages,
+                                viewModel.fileNameInput
                             )
                         }
-                        .addOnFailureListener { e ->
-                            Toast.makeText(
-                                applicationContext,
-                                "Error: ${e.message}",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
-
+                        else -> null
+                    }
                 }
 
-            ) {
-                Text("Scan Document")
-            }
-
-        }
-    }
-
-
-    @Composable
-    fun SaveOpenShareButtons(
-        pdfFile: GmsDocumentScanningResult.Pdf?
-    ) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    if (pdfFile != null)
-                        MaterialTheme.colorScheme.primaryContainer.copy(
-                            alpha = 0.7f
-                        )
-                    else
-                        Color.LightGray.copy(
-                            alpha = 0.5f
-                        )
-
-                )
-                .padding(2.dp),
-            contentPadding = PaddingValues(2.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            item {
-                AppBtn(
-                    enabled = pdfFile != null,
-                    icon = R.drawable.share,
-                    text = "Share",
-                    onClick = { FileUtil.shareFile(pdfFile, this@MainActivity) },
-                )
-            }
-            item {
-                AppBtn(
-                    enabled = pdfFile != null,
-                    icon = R.drawable.file_open,
-                    text = "Open",
-                    onClick = { FileUtil.openFile(pdfFile, this@MainActivity) },
-                )
-            }
-            item {
-                AppBtn(
-                    enabled = pdfFile != null,
-                    icon = R.drawable.save,
-                    text = "Save as PDF",
-                    onClick = { saveAsPdfToDownloads(pdfFile!!) },
-                )
-            }
-            item {
-                AppBtn(
-                    enabled = pdfFile != null,
-                    icon = R.drawable.save,
-                    text = "Save as Image",
-                    onClick = { saveAsImage() },
-                )
+                if (fileToShare != null) {
+                    val shareIntent = FileUtil.shareFile(this@MainActivity, fileToShare, "application/pdf")
+                    startActivity(Intent.createChooser(shareIntent, "Share Scanned Document"))
+                    showEnhancedToast("📤 Opening share options...", isSuccess = true)
+                } else {
+                    showEnhancedToast("❌ No document to share", isSuccess = false)
+                }
+            } catch (e: Exception) {
+                showEnhancedToast("❌ Error sharing document: ${e.message}", isSuccess = false)
+            } finally {
+                viewModel.updateLoadingState(false)
             }
         }
     }
 
-    @Composable
-    fun AppBtn(
-        enabled: Boolean,
-        icon: Int,
-        text: String,
-        onClick: () -> Unit,
-        modifier: Modifier = Modifier
-    ) {
-        Button(
-            enabled = enabled,
-            modifier = modifier
-                .padding(
-                    horizontal = 8.dp,
-                    vertical = 8.dp
-                ),  // Increased horizontal and vertical padding for better spacing
-            onClick = onClick
-        ) {
-            Icon(painterResource(id = icon), contentDescription = "Scan Document Icon")
-            Spacer(modifier = Modifier.padding(4.dp))
-            Text(text)
+    private fun copyUriToAppFiles(uri: Uri, fileName: String): File? {
+        return try {
+            val file = File(filesDir, fileName)
+            contentResolver.openInputStream(uri)?.use { input ->
+                file.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            file
+        } catch (e: IOException) {
+            e.printStackTrace()
+            null
         }
     }
 
-
-    private fun saveAsImage(
-    ) {
-        val editText = EditText(this)
-        editText.hint = "Imag_name"
-        AlertDialog.Builder(this)
-            .setTitle("Save Image to Downloads")
-            .setView(editText)
-            .setPositiveButton("Save") { _, _ ->
-                val fileName = editText.text.toString().ifEmpty {
-                    editText.hint.toString()
-                }
-                FileUtil.saveMultipleImagesToDownloads(
-                    uriList = pageUriList,
-                    context = baseContext,
-                    baseFileName = fileName
-                )
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+    private fun showEnhancedToast(message: String, isSuccess: Boolean = true) {
+        Toast.makeText(
+            this,
+            message,
+            if (isSuccess) Toast.LENGTH_SHORT else Toast.LENGTH_LONG
+        ).show()
     }
-
-    private fun saveAsPdfToDownloads(
-        pdf: GmsDocumentScanningResult.Pdf,
-    ) {
-        val editText = EditText(this)
-        editText.hint = "file_name"
-        AlertDialog.Builder(this)
-            .setTitle("Save PDF to Downloads")
-            .setView(editText)
-            .setPositiveButton("Save") { _, _ ->
-                val fileName = editText.text.toString().ifEmpty {
-                    editText.hint.toString()
-                }
-                FileUtil.saveFileToDownloads(
-                    uri = pdf.uri,
-                    fileName = fileName,
-                    context = baseContext,
-                    fileType = FileUtil.FileType.PDF
-                )
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-
 }
+
+
+fun ComponentActivity.setEdgeToEdge() {
+    return when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
+        in 6..20 -> setEdgeToEdgeWithDarkIcons()
+        else -> setEdgeToEdgeWithLightIcons()
+    }
+}
+
+@ColorInt
+private val transparent: Int = Color.Transparent.toArgb()
+
+fun ComponentActivity.setEdgeToEdgeWithDarkIcons() {
+    enableEdgeToEdge(
+        statusBarStyle = SystemBarStyle.dark(transparent),
+        navigationBarStyle = SystemBarStyle.dark(transparent)
+    )
+}
+
+
+fun ComponentActivity.setEdgeToEdgeWithLightIcons() {
+    enableEdgeToEdge(
+        statusBarStyle = SystemBarStyle.light(transparent, transparent),
+        navigationBarStyle = SystemBarStyle.light(transparent, transparent)
+    )
+}
+
