@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
                 val pages = scanResult?.pages
                 val message = when {
                     scanResult?.pdf != null -> "PDF document scanned successfully! ✓"
-                    pages != null && pages.isNotEmpty() -> "${pages.size} page${if (pages.size > 1) "s" else ""} scanned successfully! ✓"
+                    !pages.isNullOrEmpty() -> "${pages.size} page${if (pages.size > 1) "s" else ""} scanned successfully! ✓"
                     else -> "Scan cancelled"
                 }
 
@@ -145,7 +145,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 showEnhancedToast(
-                    if (success) "📄 Document '${viewModel.fileNameInput}' saved successfully to Downloads!"
+                    if (success) "📄 Document '${viewModel.fileNameInput}' saved to Downloads!"
                     else "❌ Failed to save document",
                     isSuccess = success
                 )

@@ -54,11 +54,11 @@ fun ActionButtons(
 fun ScanButton(
     onClick: () -> Unit,
     isLoading: Boolean = false,
-    modifier: Modifier = Modifier
+    scanNew : Boolean = false,
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         enabled = !isLoading,
         contentPadding = PaddingValues(16.dp)
     ) {
@@ -77,7 +77,11 @@ fun ScanButton(
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Scan Document")
+            if (scanNew) {
+                Text("Scan New Document")
+            } else {
+                Text("Scan Document")
+            }
         }
     }
 }

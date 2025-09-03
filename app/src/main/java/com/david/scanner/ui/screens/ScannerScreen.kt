@@ -42,7 +42,6 @@ fun ScannerScreen(
     onSaveClick: () -> Unit,
     onShareClick: () -> Unit,
     viewModel: ScannerViewModel = viewModel(),
-    modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
     var snackbarMessage by remember { mutableStateOf<String?>(null) }
@@ -81,11 +80,7 @@ fun ScannerScreen(
                 if (viewModel.previewImageUri == null) {
                     Spacer(modifier = Modifier.height(40.dp))
                 }
-                // Scan button
-                ScanButton(
-                    onClick = onScanClick,
-                    isLoading = viewModel.isLoading
-                )
+
 
                 // Document preview or empty state
                 if (viewModel.previewImageUri != null) {
@@ -110,7 +105,12 @@ fun ScannerScreen(
                         onFileNameChange = viewModel::updateFileName
                     )
                 }
-
+                // Scan button
+                ScanButton(
+                    onClick = onScanClick,
+                    isLoading = viewModel.isLoading,
+                    viewModel.previewImageUri != null
+                )
                 // Action buttons (Save & Share)
                 ActionButtons(
                     isEnabled = viewModel.scannedPages.isNotEmpty() && !viewModel.isLoading,
