@@ -70,17 +70,14 @@ fun ScannerScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+              //      .padding(top = paddingValues.calculateTopPadding())
+                    .padding(horizontal = 16.dp)
                     .verticalScroll(scrollState),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(26.dp)
             ) {
 
-                if (viewModel.previewImageUri == null) {
-                    Spacer(modifier = Modifier.height(40.dp))
-                }
-
+                Spacer(modifier = Modifier.height(60.dp))
 
                 // Document preview or empty state
                 if (viewModel.previewImageUri != null) {

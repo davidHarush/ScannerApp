@@ -78,7 +78,7 @@ class MainActivity : ComponentActivity() {
             viewModel = viewModel<ScannerViewModel>()
 
             ScannerAppTheme {
-                val backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f).toArgb()
+                val backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f).toArgb()
                 LaunchedEffect(Unit) {
                     enableEdgeToEdge(
                         statusBarStyle = SystemBarStyle.light(backgroundColor, backgroundColor),
